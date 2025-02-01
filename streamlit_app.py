@@ -11,7 +11,6 @@ import logging
 import threading
 import asyncio
 from aiogram import Bot, Dispatcher, types
-from aiogram.utils import executor
 from aiogram.dispatcher import filters
 
 # Configure logging
