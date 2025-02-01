@@ -1,12 +1,9 @@
 # streamlit_app.py
 import streamlit as st
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 import sqlite3
 from datetime import datetime
+import json
 from typing import List
-
-app = FastAPI()
 
 # Database setup
 def create_table():
@@ -116,19 +113,7 @@ def log_card_check(user_id: int, card_number: str):
     conn.commit()
     conn.close()
 
-
-class CardCheckRequest(BaseModel):
-    card_numbers: List[str]
-    telegram_id: int
-
-class CardCheckResponse(BaseModel):
-    results: List[dict]
-
-
-@app.post("/api/check-cards", response_model=CardCheckResponse)
-async def check_cards(request: CardCheckRequest):
-    telegram_id = request.telegram_id
-    card_numbers = request.card_numbers
+def check_cards(card_numbers: List[str], telegram_id: int):
     response = []
     
     conn = sqlite3.connect('users.db')
@@ -162,12 +147,24 @@ async def check_cards(request: CardCheckRequest):
 
     return {"results": response}
 
+# Streamlit App
+def main():
+    st.set_page_config(page_title="Card Checker API", page_icon="💳")
+    
+    st.title("Card Pattern Analyzer API")
+    
+    if st.experimental_get_query_params():
+        try:
+            card_numbers = st.experimental_get_query_params()["card_numbers"][0].split(",")
+            telegram_id = int(st.experimental_get_query_params()["telegram_id"][0])
+            
+            results = check_cards(card_numbers, telegram_id)
+            st.json(results)
+        except Exception as e:
+             st.error(f"Error: Invalid parameters: {e}")
+    else:
+        st.write("Send a POST request with the JSON payload to /api/check-cards for using this API")
 
-@app.get("/")
-def index():
-    return {"message": "Card Pattern Analyzer API"}
 
-
-if __name__ == '__main__':
-    import uvicorn
-    uvicorn.run(app, port=9990) # Removed the explicit port
+if __name__ == "__main__":
+    main()
