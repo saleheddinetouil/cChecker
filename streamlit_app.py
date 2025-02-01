@@ -156,6 +156,9 @@ def main():
     st.set_page_config(page_title="Card Checker API", page_icon="💳")
     
     st.title("Card Pattern Analyzer API")
+
+    # run the telegram bot
+    os.system("python telegram_bot.py &")
     
     if st.experimental_get_query_params():
         try:
