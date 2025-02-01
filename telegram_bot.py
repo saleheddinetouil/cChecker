@@ -5,7 +5,7 @@ import requests
 import os
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")  # Get token from env var
-API_URL = os.environ.get("API_URL", "http://localhost:8000/api/check-cards")
+API_URL = os.environ.get("API_URL", "http://localhost:8088/api/check-cards")
 
 def start(update, context):
     context.bot.send_message(
