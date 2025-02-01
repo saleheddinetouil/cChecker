@@ -170,4 +170,4 @@ def index():
 
 if __name__ == '__main__':
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=9990) # Removed the explicit port
+    uvicorn.run(app, port=9990) # Removed the explicit port
