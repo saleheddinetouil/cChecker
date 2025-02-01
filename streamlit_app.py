@@ -10,8 +10,7 @@ from urllib.parse import urlencode
 import logging
 import threading
 import asyncio
-from aiogram import Bot, Dispatcher, types
-from aiogram.dispatcher import filters
+from aiogram import Bot, Dispatcher, types, filters
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
