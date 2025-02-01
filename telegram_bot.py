@@ -3,9 +3,11 @@ import telegram
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import requests
 import os
+import json
+from urllib.parse import urlencode  # NEW IMPORT
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")  # Get token from env var
-API_URL = os.environ.get("API_URL", "http://localhost:8099/api/check-cards")
+API_URL = os.environ.get("API_URL", "http://localhost:8501")  # Streamlit default local port
 
 def start(update, context):
     context.bot.send_message(
@@ -18,11 +20,13 @@ def check_card(update, context):
     telegram_id = update.message.from_user.id
 
     try:
-        payload = {"card_numbers": card_numbers, "telegram_id": telegram_id}
-        response = requests.post(API_URL, json=payload)
+        # Construct the query parameters
+        query_params = urlencode({"card_numbers": ",".join(card_numbers), "telegram_id": telegram_id})
+        # Make a GET request
+        response = requests.get(f"{API_URL}?{query_params}") #  Construct URL
         response.raise_for_status()
         data = response.json()
-
+        
         message = ""
         for result in data["results"]:
             if "error" in result:
