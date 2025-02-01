@@ -263,7 +263,7 @@ async def history_command(message: types.Message):
 def run_telegram_bot():
     global bot, dp, bot_running
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
-    dp = Dispatcher(bot, storage=MemoryStorage()) # initialize dispatcher with memory storage
+    dp = Dispatcher(bot) # initialize dispatcher with memory storage
 
     dp.message_handler(commands=["start"])(start_command)
     dp.message_handler(filters.Text(startswith=["/upgrade", "/validate_payment","/history"], ignore_case=True) , commands=None )(handle_command)
