@@ -11,7 +11,7 @@ import logging
 import threading
 import asyncio
 from aiogram import Bot, Dispatcher, types, filters
-from aiogram.contrib.fsm_storage.memory import MemoryStorage # import memory storage
+from aiogram.fsm.storage.memory import MemoryStorage
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
