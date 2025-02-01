@@ -4,8 +4,16 @@ import sqlite3
 from datetime import datetime
 import json
 from typing import List
+import telegram
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+import requests
+import os
+import json
+from urllib.parse import urlencode
+import threading
+import asyncio
 
-# Database setup
+# Database setup (same as before)
 def create_table():
     conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
@@ -33,7 +41,7 @@ def create_table():
 
 create_table()
 
-
+# Card Checking logic (same as before)
 def luhn_check(card_number: str) -> bool:
     card_number = "".join(filter(str.isdigit, card_number))
     if not card_number:
@@ -147,12 +155,119 @@ def check_cards(card_numbers: List[str], telegram_id: int):
 
     return {"results": response}
 
+# Telegram Bot Logic (same as before)
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")  # Get token from env var
+API_URL = os.environ.get("API_URL", "http://localhost:8501")  # Streamlit default local port
+
+def start(update, context):
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="Hi! I'm your Card Pattern Analyzer Bot.\n\nSend me card numbers, one per line, and I'll analyze them for you.\n\n Use /upgrade to become premium and get unlimited access. \n\nTo view previous usages use /history"
+    )
+
+def check_card(update, context):
+    card_numbers = update.message.text.splitlines()
+    telegram_id = update.message.from_user.id
+
+    try:
+        query_params = urlencode({"card_numbers": ",".join(card_numbers), "telegram_id": telegram_id})
+        response = requests.get(f"{API_URL}?{query_params}")
+        response.raise_for_status()
+        data = response.json()
+        
+        message = ""
+        for result in data["results"]:
+            if "error" in result:
+                message += f"Card Number: {result['card_number']}\n{result['error']}\n\n"
+            else:
+                message += f"Card Number: {result['card_number']}\n"
+                message += f"  Is Valid: {result['is_valid']}\n"
+                message += f"  Network: {result['network']}\n\n"
+
+        context.bot.send_message(chat_id=update.effective_chat.id, text=message)
+    except requests.exceptions.RequestException as e:
+        context.bot.send_message(chat_id=update.effective_chat.id,
+                                 text=f"An error occurred: {e}")
+
+
+def upgrade(update, context):
+    context.bot.send_message(chat_id=update.effective_chat.id, text="To upgrade to premium, please send $10 via PayPal to [PayPal email]. After paying use the /validate_payment command with transaction hash.")
+
+
+def validate_payment(update, context):
+    if not context.args:
+        context.bot.send_message(chat_id=update.effective_chat.id, text="Please send payment hash after command. Ex. /validate_payment transaction_hash")
+        return
+
+    transaction_hash = " ".join(context.args)
+
+    conn = sqlite3.connect('users.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, telegram_id FROM users WHERE telegram_id = ?", (update.message.from_user.id,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        context.bot.send_message(chat_id=update.effective_chat.id, text="User Not found, Please Use /start command first")
+        return
+
+    user_id, telegram_id = user
+
+    # Simulate payment validation with a simple hash checking
+    if transaction_hash.startswith("valid_payment_"):
+        cursor.execute("UPDATE users SET subscription_tier = 'premium' WHERE user_id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+        context.bot.send_message(chat_id=update.effective_chat.id, text="You have successfully upgraded to premium!")
+    else:
+        conn.close()
+        context.bot.send_message(chat_id=update.effective_chat.id, text="Payment not validated! Please be sure to send the correct transaction hash and use valid payment methods.")
+
+def get_history(update, context):
+    conn = sqlite3.connect('users.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, telegram_id FROM users WHERE telegram_id = ?", (update.message.from_user.id,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        context.bot.send_message(chat_id=update.effective_chat.id, text="User Not found, Please Use /start command first")
+        return
+
+    user_id, telegram_id = user
+
+    cursor.execute("SELECT card_number, check_time FROM usage_log WHERE user_id = ? ORDER BY check_time DESC LIMIT 10", (user_id,))
+    usage_history = cursor.fetchall()
+    conn.close()
+
+    if not usage_history:
+        context.bot.send_message(chat_id=update.effective_chat.id, text="No history found")
+        return
+
+    message = "Usage history for last 10 checks:\n\n"
+    for card_number, check_time in usage_history:
+        message += f"Card Number: {card_number}\n"
+        message += f"Check Time: {check_time}\n\n"
+
+    context.bot.send_message(chat_id=update.effective_chat.id, text=message)
+
+def run_telegram_bot():
+    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
+    dispatcher = updater.dispatcher
+
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(MessageHandler(Filters.text & (~Filters.command), check_card))
+    dispatcher.add_handler(CommandHandler("upgrade", upgrade))
+    dispatcher.add_handler(CommandHandler("validate_payment", validate_payment, pass_args=True))
+    dispatcher.add_handler(CommandHandler("history", get_history))
+
+    updater.start_polling()
+    updater.idle()
+
 # Streamlit App
 def main():
     st.set_page_config(page_title="Card Checker API", page_icon="💳")
     
     st.title("Card Pattern Analyzer API")
-    
+
     if st.experimental_get_query_params():
         try:
             card_numbers = st.experimental_get_query_params()["card_numbers"][0].split(",")
@@ -164,7 +279,14 @@ def main():
              st.error(f"Error: Invalid parameters: {e}")
     else:
         st.write("Send a POST request with the JSON payload to /api/check-cards for using this API")
-
+    
+    # Run the Telegram bot in a separate thread
+    if TELEGRAM_BOT_TOKEN:
+      if not hasattr(st, 'bot_started') or not st.bot_started:
+        st.bot_started = True
+        bot_thread = threading.Thread(target=run_telegram_bot)
+        bot_thread.daemon = True  # Set the thread as a daemon so it closes with the main process
+        bot_thread.start()
 
 if __name__ == "__main__":
     main()
