@@ -1,4 +1,4 @@
+python-telegram-bot==20.8
 streamlit
 pydantic
 requests
-python-telegram-bot
